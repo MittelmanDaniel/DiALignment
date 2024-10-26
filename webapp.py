@@ -6,12 +6,14 @@ import google.generativeai as genai
 import random
 import ast
 import os
+import pandas as pd
+import plotly.express as px
+
 
 # Configure the Google generative model
 # Add API KEYS
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-
 
 genai.configure(api_key=gemini_api_key)
 gemini_model = genai.GenerativeModel('gemini-1.5-flash')
@@ -37,27 +39,17 @@ model_choice = st.selectbox("Choose a model to generate prompts:", ("Gemini", "C
 # Define function to generate prompts using the Gemini model
 def generate_with_gemini(prompt):
     # Simulating response from Gemini
-    response = {
-        "text": "['What is artificial intelligence?', 'Explain the concept of AI in simple terms.', 'What are the main types of AI?']"
-    }
+    response = gemini_model.generate_content(f"Create 100 generic prompts for an llm. Include the following topic in each prompt: {prompt}. Write it as a list of prompts only separated by newlines, and include no other text.")
+    print(response.text)
+    print(type(response.text))
 
+    prompts = response.text
+    print(type(prompts))
     # Clean up the response.text to remove unwanted characters
-    clean_text = response['text'].strip(" \n").replace("```python", "").replace("```", "")
-
-    # Use ast.literal_eval to safely evaluate the string
-    try:
-        prompts = ast.literal_eval(clean_text)
-
-        # Ensure it is a list
-        if isinstance(prompts, list):
-            # Choose a random prompt or select the first one
-            selected_prompt = random.choice(prompts)
-            return selected_prompt
-        else:
-            raise ValueError("Parsed response is not a list.")
-    except (SyntaxError, ValueError) as e:
-        print("Error parsing prompts:", e)
-        return None
+    clean_text = prompts.split("\n")
+    print(clean_text)
+    print(type(clean_text))
+    return clean_text
 
 
 # Define function to generate prompts using Claude model
@@ -82,7 +74,7 @@ def generate_with_claude(prompt, intensity=5):
     else:
         print("The content is not a list.")
 
-    return prompts[0]
+    return prompts
 
 
 
@@ -110,19 +102,43 @@ if "messages" not in st.session_state:
 if st.button("Generate Responses"):
     with st.spinner("Generating..."):
         # Generate responses for the normal and modified intensity values
-        normal_response = generate_response(init_prompt, model_choice, intensity=5)
-        modified_response = generate_response(init_prompt, model_choice, intensity=intensity)
+        normal_prompts = generate_response(init_prompt, model_choice, intensity=5)
+        modified_prompts = generate_response(init_prompt, model_choice, intensity=intensity)
 
     # Chat window style output
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Normal Model Response")
-        normal_response_content = "".join(response_display(normal_response))
+        normal_response_content = "".join(response_display(normal_prompts[0]))
         st.markdown(normal_response_content)
 
     with col2:
         st.subheader("Modified Model Response")
-        modified_response_content = "".join(response_display(modified_response))
+        modified_response_content = "".join(response_display(modified_prompts[0]))
         st.markdown(modified_response_content)
+
+
+
+'''
+# This is the data is that is from the results from ryan and gang
+df = pd.DataFrame(data)
+
+st.dataframe(df)
+
+sb_options = list(df.columns)
+sb_options.remove('Name')
+
+colselect1, colselect2 = st.columns(2)
+with colselect1:
+    sel_metric = st.selectbox('Select the Metric', options=sb_options)
+
+# Create a new dataframe for plotting. Sort it for plotting display.
+# If metric value is the same, display name by alphabetic order.
+df_metric = df.copy()
+df_metric = df_metric.sort_values(by=[sel_metric, 'Name'], ascending=[True, False])
+
+plot_assym = px.bar(df_metric, x=sel_metric, y="Name", template="plotly_white", text_auto=True)
+st.plotly_chart(plot_assym)
+'''
 
