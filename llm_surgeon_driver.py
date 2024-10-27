@@ -50,6 +50,9 @@ model = HookedTransformer.from_pretrained_no_processing("meta-llama/Llama-3.2-1B
 
 #GET VECTOR
 LAYER = 7
+n_samples = min(len(benign_prompts), len(harmful_prompts))
+batch_size = 32
+refusal_dir = torch.zeros(())
 refusal_dir = llm_surgeon.remove_vec_from_benign_to_mean(model, benign_prompts, harmful_prompts, LAYER)
 WEIGHT = 0.001
 
