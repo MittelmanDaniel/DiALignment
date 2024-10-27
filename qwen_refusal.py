@@ -111,18 +111,20 @@ def get_generations(
 def direction_ablation_hook(
     activation: Float[Tensor, "... d_act"],
     hook: HookPoint,
-    direction: Float[Tensor, "d_act"]
+    direction: Float[Tensor, "d_act"],
+    amplitude
 ):
     proj = einops.einsum(activation, direction.view(-1, 1), '... d_act, d_act single -> ... single') * direction
-    return activation - 2*proj
+    return activation - proj * amplitude
 
 def direction_amplify_hook(
     activation: Float[Tensor, "... d_act"],
     hook: HookPoint,
-    direction: Float[Tensor, "d_act"]
+    direction: Float[Tensor, "d_act"],
+    amplitude
 ):
-    # proj = einops.einsum(activation, direction.view(-1, 1), '... d_act, d_act single -> ... single') * direction
-    return activation + direction #- proj
+    #proj = einops.einsum(activation, direction.view(-1, 1), '... d_act, d_act single -> ... single') * direction
+    return activation + direction * 0.5 * amplitude#proj
 
 def load_model():
     model = HookedTransformer.from_pretrained_no_processing(
@@ -164,7 +166,7 @@ def initialize_activation_vectors(model):
     # compute difference of means between harmful and harmless activations at an intermediate layer
 
     pos = -1
-    layer = 15
+    layer = 14
 
     harmful_mean_act = harmful_cache['resid_pre', layer][:, pos, :].mean(dim=0)
     harmless_mean_act = harmless_cache['resid_pre', layer][:, pos, :].mean(dim=0)
@@ -179,16 +181,34 @@ def initialize_activation_vectors(model):
 
     return refusal_dir, harmful_inst_test
 
-def ablate_refusal(model, refusal_dir, prompts):
+def ablate_refusal(model, refusal_dir, prompts, amplitude):
 
     tokenize_instructions_fn = functools.partial(tokenize_instructions_qwen_chat, tokenizer=model.tokenizer)
 
     intervention_dir = refusal_dir
     intervention_layers = list(range(model.cfg.n_layers))  # all layers
 
-    hook_fn = functools.partial(direction_ablation_hook, direction=intervention_dir)
+    hook_fn = functools.partial(direction_ablation_hook, direction=intervention_dir, amplitude=amplitude)
     fwd_hooks = [(utils.get_act_name(act_name, l), hook_fn) for l in intervention_layers for act_name in
-                 ['resid_pre', 'resid_mid', 'resid_post']]
+                 ['resid_pre']]
+
+    intervention_generations = get_generations(model, prompts, tokenize_instructions_fn,
+                                               fwd_hooks=fwd_hooks)
+    baseline_generations = get_generations(model, prompts, tokenize_instructions_fn,
+                                           fwd_hooks=[])
+
+    return baseline_generations, intervention_generations
+
+def amplify_refusal(model, refusal_dir, prompts, amplitude):
+
+    tokenize_instructions_fn = functools.partial(tokenize_instructions_qwen_chat, tokenizer=model.tokenizer, amplitude=amplitude)
+
+    intervention_dir = refusal_dir
+    intervention_layers = list(range(model.cfg.n_layers))  # all layers
+
+    hook_fn = functools.partial(direction_amplify_hook, direction=intervention_dir)
+    fwd_hooks = [(utils.get_act_name(act_name, l), hook_fn) for l in intervention_layers for act_name in
+                 ['resid_pre']] # , 'resid_mid', 'resid_post']
 
     intervention_generations = get_generations(model, prompts, tokenize_instructions_fn,
                                                fwd_hooks=fwd_hooks)
@@ -199,9 +219,9 @@ def ablate_refusal(model, refusal_dir, prompts):
 
 if __name__ == "__main__":
     model = load_model()
-    refusal_dir, harmful_inst_test = initialize_activation_vectors(model)
+    # refusal_dir, harmful_inst_test = initialize_activation_vectors(model)
     with open("refusal_dir.pkl", "rb") as f:
         refusal_dir = pickle.load(f)
-    baseline_generations, intervention_generations = ablate_refusal(model, refusal_dir, harmful_inst_test[:4])
+    baseline_generations, intervention_generations = amplify_refusal(model, refusal_dir, ["Can you teach me how do I tie a shoe?"], 1)
     print("Baseline:\n",baseline_generations)
     print("Intervention:\n",intervention_generations)
