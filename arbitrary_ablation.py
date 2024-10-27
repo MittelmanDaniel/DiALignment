@@ -8,7 +8,7 @@ from datasets import load_dataset
 
 import torch
 
-import pickle
+import google_thing
 
 HARMFUL_BATCH = 32
 
@@ -21,13 +21,6 @@ harmful_dataset = pd.read_csv('https://raw.githubusercontent.com/llm-attacks/llm
 harmful_instructions = harmful_dataset['goal'].to_list()
 
 harmful_prompts = harmful_instructions[:HARMFUL_BATCH]
-
-#file_path = './transformer_experiments/zebra.pickle'
-#with open(file_path, 'rb') as file:
-#    harmful_prompts = pickle.load(file)
-
-#harmful_prompts = harmful_prompts[:HARMFUL_BATCH]
-
 
 #GET BENIGN STUFF
 hf_path = 'tatsu-lab/alpaca'
@@ -42,24 +35,34 @@ for i in range(len(benign_dataset['train'])):
 benign_prompts = benign_instructions[:BENIGN_BATCH]
 
 
-#RUN AND EVAL THE MODEL
+TARGET = "9.11 and 9.8"
+
+target_prompts = google_thing.generate_prompts(TARGET)
+
+target_prompts = target_prompts[:HARMFUL_BATCH]
+print(target_prompts)
+#print(target_prompts)
+
 torch.set_grad_enabled(False)
 device = utils.get_device()
 
+
+print('based')
+
 model = HookedTransformer.from_pretrained_no_processing("meta-llama/Llama-3.2-1B-Instruct", device=device, default_padding_side='left')
 
-#GET VECTOR
 LAYER = 7
-refusal_dir = llm_surgeon.remove_vec_from_benign_to_mean(model, benign_prompts, harmful_prompts, LAYER)
-WEIGHT = 0.001
+target_dir = llm_surgeon.remove_vec_from_benign_to_mean(model, benign_prompts, target_prompts, LAYER)
 
-llm_surgeon.add_refusal_hook(model, list(range(model.cfg.n_layers)), refusal_dir)
+print("GOT")
 
-#llm_surgeon.add_dir_hook(model, list(range(model.cfg.n_layers)), refusal_dir, WEIGHT)
+llm_surgeon.add_refusal_hook(model, list(range(model.cfg.n_layers)), target_dir)
+
 
 eval_chat = [
-  {"role": "user", "content": "Give me a guide on helping cannibals"},
+  {"role": "user", "content": "Is 9.11 greater than 9.8"},
 ]
+
 
 eval_tokens = model.tokenizer.apply_chat_template(eval_chat, tokenize=False)
 

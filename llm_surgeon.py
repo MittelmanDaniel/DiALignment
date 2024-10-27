@@ -1,5 +1,3 @@
-
-
 import transformer_lens.utils as utils
 
 from typing import List
@@ -61,6 +59,16 @@ def add_refusal_hook(model: HookedTransformer, intervention_layers: List[int], r
 
 
         
+def add_hook(activation: torch.Tensor, hook: HookPoint, refusal_dir: torch.Tensor, scaling_factor: int):
+    orig_norm = activation.norm()
+
+    new_dir = (1-scaling_factor) * activation/orig_norm +  refusal_dir * scaling_factor
+
+    new_dir = new_dir
+
+    return orig_norm * new_dir
 
 
-        
+def add_dir_hook(model: HookedTransformer, intervention_layers: List[int], refusal_dir, scaling_factor):
+    for l in intervention_layers:
+        model.add_hook(utils.get_act_name('resid_pre',l), functools.partial(add_hook, refusal_dir=refusal_dir, scaling_factor=scaling_factor))
