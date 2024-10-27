@@ -19,7 +19,7 @@ from transformer_lens.hook_points import (
 
 HARMFUL_BATCH = 128
 
-BENIGN_BATCH = 128
+BENIGN_BATCH = 32
 
 PROCESS_BATCH = 32
 
@@ -43,20 +43,20 @@ for i in range(len(benign_dataset['train'])):
 benign_prompts = benign_instructions[:BENIGN_BATCH]
 
 
-TARGET1 = "Bible Verses"
+TARGET1 = "Dates"
 
-target1_prompts = google_thing.generate_prompts(TARGET1)
+target1_prompts = google_thing.generate_prompts(TARGET1)[:HARMFUL_BATCH//2]
 
-TARGET2 = "9.11"
+TARGET2 = "Bible Verses"
 
-target2_prompts = google_thing.generate_prompts(TARGET2)
+target2_prompts = google_thing.generate_prompts(TARGET2)[:HARMFUL_BATCH//2]
 
 
-target_prompts =target1_prompts + target2_prompts
+#target_prompts = target1_prompts + target2_prompts
 
-random.shuffle(target_prompts)
+#random.shuffle(target_prompts)
 
-target_prompts = target_prompts[:HARMFUL_BATCH]
+#target_prompts = target_prompts[:HARMFUL_BATCH]
 
 #print(target_prompts)
 #print(target_prompts)
@@ -70,10 +70,13 @@ print('based')
 model = HookedTransformer.from_pretrained_no_processing("meta-llama/Llama-3.2-1B-Instruct", device=device, default_padding_side='left')
 
 LAYER = 7
-target_dir = llm_surgeon.batch_refusal_dir(model, PROCESS_BATCH, benign_prompts,  target_prompts, LAYER)
-print(target_dir)
+target1_dir = llm_surgeon.batch_refusal_dir(model, PROCESS_BATCH, benign_prompts,  target1_prompts, LAYER)
+target2_dir = llm_surgeon.batch_refusal_dir(model, PROCESS_BATCH, benign_prompts,  target2_prompts, LAYER)
 
+target_dir = (target1_dir + target2_dir)
 target_dir = target_dir/target_dir.norm()
+
+torch.save(target_dir.to('cpu'), "ablate_dir.pt")
 #print("GOT")
 
 def double_ablation_hook(activation: torch.Tensor, hook: HookPoint):
@@ -90,6 +93,6 @@ eval_chat = [
 eval_tokens = model.tokenizer.apply_chat_template(eval_chat, tokenize=False)
 
 
-output = model.generate(eval_tokens, max_new_tokens=512)
+output = model.generate(eval_tokens, max_new_tokens=256)
 
 print(output[len(eval_tokens):])
