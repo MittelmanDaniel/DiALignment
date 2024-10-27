@@ -26,7 +26,7 @@ def get_mean_activations(model: HookedTransformer, prompts):
     convers = convert_prompts_to_chat_template(prompts)
     tokens = model.tokenizer.apply_chat_template(convers, tokenize=False)
 
-    logits, cache = model.run_with_cache(tokens)
+    logits, cache = model.run_with_cache(tokens, names_filter=lambda hook_name: 'resid' in hook_name)
 
     return logits, cache
 

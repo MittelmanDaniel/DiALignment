@@ -43,7 +43,7 @@ model = HookedTransformer.from_pretrained_no_processing("meta-llama/Llama-3.2-1B
 LAYER = 11
 refusal_dir = llm_surgeon.remove_vec_from_benign_to_mean(model, benign_prompts, harmful_prompts, LAYER)
 
-llm_surgeon.add_refusal_hook(model, int(range(model.cfg.n_layers)))
+llm_surgeon.add_refusal_hook(model, list(range(model.cfg.n_layers)), refusal_dir)
 
 
 eval_chat = [
