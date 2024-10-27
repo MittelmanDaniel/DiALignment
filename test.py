@@ -33,23 +33,6 @@ for i in range(len(benign_dataset['train'])):
 
 benign_prompts = benign_instructions[:BENIGN_BATCH]
 
-
-#RUN AND EVAL THE MODEL
-torch.set_grad_enabled(False)
-device = utils.get_device()
-
-model = HookedTransformer.from_pretrained_no_processing("meta-llama/Llama-3.2-1B-Instruct", device=device, default_padding_side='left')
-
-import llm_surgeon
-
-import transformer_lens.utils as utils
-from transformer_lens import HookedTransformer
-
-import pandas as pd
-from datasets import load_dataset
-
-import torch
-
 torch.set_grad_enabled(False)
 device = utils.get_device()
 
@@ -88,15 +71,29 @@ def temp(prompts):
     eval_chat = llm_surgeon.convert_prompts_to_chat_template(prompts)
 
     # CRUCIAL CHANGE: Use padding to ensure consistent sequence length
-    unmodified_eval_tokens = model.tokenizer.apply_chat_template(eval_chat, return_tensors="pt", padding=True, tokenize=False).to(device) 
+    unmodified_eval_tokens = model.tokenizer.apply_chat_template(eval_chat, return_tensors="pt", padding=True).to(device=device)
     unmodified_output = model.generate(unmodified_eval_tokens, max_new_tokens=256)
 
     llm_surgeon.add_refusal_hook(model, list(range(model.cfg.n_layers)), refusal_dir)
 
     # Apply padding here as well
-    modified_eval_tokens = model.tokenizer.apply_chat_template(eval_chat, return_tensors="pt", padding=True, tokenize=False).to(device)
+    modified_eval_tokens = model.tokenizer.apply_chat_template(eval_chat, return_tensors="pt", padding=True).to(device=device)
     modified_output = model.generate(modified_eval_tokens, max_new_tokens=256)
 
     return (unmodified_eval_tokens, unmodified_output, modified_eval_tokens, modified_output)
 
 
+def decode(temp_output):
+    ls3 = []
+    for ten in temp_output:
+        ls3.append(model.tokenizer.batch_decode(ten))
+    
+    ls4 = []
+    for i in range(len(ls3)):
+        l = 0
+        if i % 2 == 0:
+            l = len(ls3[i][0])
+        else:
+            for prompt in ls3[i]:
+                ls4.append(prompt)
+    return ls4 # first half of responses is unmodified, second half is modified
