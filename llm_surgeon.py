@@ -11,13 +11,15 @@ from transformer_lens.hook_points import (
     HookPoint,
 ) 
 
+device = utils.get_device()
+
 
     #takes in a list of prompts
 def convert_prompts_to_chat_template(prompts):
     return  [[{"role":"user", "content": prompt}] for prompt in prompts]
 
 
-
+device = utils.get_device()
 #prompt is a list of lists of dicts, where the internal list of dicts is 
 def get_mean_activations(model: HookedTransformer, prompts):
 
@@ -44,6 +46,13 @@ def remove_vec_from_benign_to_mean(model: HookedTransformer, benign_prompts, har
 
     return refusal_dir
 
+def batch_refusal_dir(model: HookedTransformer, batch_size, benign_prompts, harmful_prompts, layer):
+    refusal_dir = torch.zeros((model.cfg.d_model,), dtype=model.cfg.dtype, device=device)
+    n_samples = min(len(benign_prompts), len(harmful_prompts))
+    for i in range(0, n_samples, batch_size):
+        refusal_dir += remove_vec_from_benign_to_mean(model, benign_prompts[i:i+batch_size], harmful_prompts[i:i+batch_size], layer) / n_samples
+
+    return refusal_dir
 
 def refusal_removal_hook(activation: torch.Tensor, hook: HookPoint, refusal_dir: torch.Tensor):
     elementwise_product = activation * refusal_dir.view(-1)

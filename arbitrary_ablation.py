@@ -10,10 +10,18 @@ import torch
 
 import google_thing
 
-HARMFUL_BATCH = 32
+import random
 
-BENIGN_BATCH = 32
+from transformer_lens.hook_points import (
+    HookPoint,
+) 
 
+
+HARMFUL_BATCH = 128
+
+BENIGN_BATCH = 128
+
+PROCESS_BATCH = 32
 
 #GET HARMFUL STUFF
 harmful_dataset = pd.read_csv('https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/advbench/harmful_behaviors.csv')
@@ -35,12 +43,22 @@ for i in range(len(benign_dataset['train'])):
 benign_prompts = benign_instructions[:BENIGN_BATCH]
 
 
-TARGET = "9.11 and 9.8"
+TARGET1 = "Bible Verses"
 
-target_prompts = google_thing.generate_prompts(TARGET)
+target1_prompts = google_thing.generate_prompts(TARGET1)
+
+TARGET2 = "9.11"
+
+target2_prompts = google_thing.generate_prompts(TARGET2)
+
+
+target_prompts =target1_prompts + target2_prompts
+
+random.shuffle(target_prompts)
 
 target_prompts = target_prompts[:HARMFUL_BATCH]
-print(target_prompts)
+
+#print(target_prompts)
 #print(target_prompts)
 
 torch.set_grad_enabled(False)
@@ -52,9 +70,14 @@ print('based')
 model = HookedTransformer.from_pretrained_no_processing("meta-llama/Llama-3.2-1B-Instruct", device=device, default_padding_side='left')
 
 LAYER = 7
-target_dir = llm_surgeon.remove_vec_from_benign_to_mean(model, benign_prompts, target_prompts, LAYER)
+target_dir = llm_surgeon.batch_refusal_dir(model, PROCESS_BATCH, benign_prompts,  target_prompts, LAYER)
+print(target_dir)
 
-print("GOT")
+target_dir = target_dir/target_dir.norm()
+#print("GOT")
+
+def double_ablation_hook(activation: torch.Tensor, hook: HookPoint):
+    pass
 
 llm_surgeon.add_refusal_hook(model, list(range(model.cfg.n_layers)), target_dir)
 
@@ -67,6 +90,6 @@ eval_chat = [
 eval_tokens = model.tokenizer.apply_chat_template(eval_chat, tokenize=False)
 
 
-output = model.generate(eval_tokens, max_new_tokens=256)
+output = model.generate(eval_tokens, max_new_tokens=512)
 
 print(output[len(eval_tokens):])
