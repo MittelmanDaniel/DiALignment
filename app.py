@@ -9,6 +9,7 @@ from transformer_lens import HookedTransformer
 
 import pandas as pd
 from datasets import load_dataset
+import google_thing
 
 import torch
 
@@ -51,10 +52,10 @@ def load_llama():
       refusal_dir += llm_surgeon.remove_vec_from_benign_to_mean(model, benign_prompts[i:i+batch_size], harmful_prompts[i:i+batch_size], LAYER)
    WEIGHT = 0.001
    refusal_dir = refusal_dir / refusal_dir.norm()
-   return llm_surgeon, model, refusal_dir
+   return llm_surgeon, model, refusal_dir, benign_prompts
 
 model, refusal_dir = load_qwen()
-llama_surgeon, llama_model, llama_refusal = load_llama()
+llama_surgeon, llama_model, llama_refusal, benign_prompts = load_llama()
 
 app = Flask(__name__)
 
@@ -81,8 +82,9 @@ def llama():
    json = request.get_json(force=True)
    message = json['message']
    amplitude = json['amplitude']
+   topics = json.get('topics', [])
 
-   print(json)
+   print("LLAMA received call with message: ", message, " and amplitude: ", amplitude, " and topics: ", topics)
 
    eval_chat = [
       {"role": "user", "content": message},
@@ -92,7 +94,24 @@ def llama():
    benign = llama_model.generate(eval_tokens, max_new_tokens=256)
    benign = benign[len(eval_tokens):]
 
-   llm_surgeon.add_refusal_hook(llama_model, list(range(llama_model.cfg.n_layers)), llama_refusal)
+   example = ("bible verses", "9.11", "bible verse")
+   device = utils.get_device()
+   if len(topics) > 0 and topics[0].lower() in example and topics[1].lower() in example:
+      topic_dir = torch.load("./ablate_dir_4.pt").to(device)
+      topic_dir = topic_dir / topic_dir.norm()
+      ablation_vector = topic_dir
+   elif len(topics) > 0:
+      target_prompts = [google_thing.generate_prompts(topic)[:32] for topic in topics if topic != '']
+      target_dir = torch.zeros((llama_model.cfg.d_model,), dtype=llama_model.cfg.dtype, device=device)
+      layer = 7
+      for target_batch in target_prompts:
+         target_dir += llm_surgeon.batch_refusal_dir(llama_model, 32, benign_prompts[:32], target_batch, layer)
+      target_dir = target_dir / target_dir.norm()
+      ablation_vector = target_dir
+   else:
+      ablation_vector = llama_refusal * amplitude
+
+   llm_surgeon.add_refusal_hook(llama_model, list(range(llama_model.cfg.n_layers)), ablation_vector)
    intervention = llama_model.generate(eval_tokens, max_new_tokens=256)
    intervention = intervention[len(eval_tokens):]
 
