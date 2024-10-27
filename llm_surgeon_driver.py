@@ -73,3 +73,4 @@ eval_tokens = model.tokenizer.apply_chat_template(eval_chat, tokenize=False)
 output = model.generate(eval_tokens, max_new_tokens=256)
 
 print(output[len(eval_tokens):])
+

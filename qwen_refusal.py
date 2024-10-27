@@ -201,12 +201,12 @@ def ablate_refusal(model, refusal_dir, prompts, amplitude):
 
 def amplify_refusal(model, refusal_dir, prompts, amplitude):
 
-    tokenize_instructions_fn = functools.partial(tokenize_instructions_qwen_chat, tokenizer=model.tokenizer, amplitude=amplitude)
+    tokenize_instructions_fn = functools.partial(tokenize_instructions_qwen_chat, tokenizer=model.tokenizer)
 
     intervention_dir = refusal_dir
     intervention_layers = list(range(model.cfg.n_layers))  # all layers
 
-    hook_fn = functools.partial(direction_amplify_hook, direction=intervention_dir)
+    hook_fn = functools.partial(direction_amplify_hook, direction=intervention_dir, amplitude=amplitude)
     fwd_hooks = [(utils.get_act_name(act_name, l), hook_fn) for l in intervention_layers for act_name in
                  ['resid_pre']] # , 'resid_mid', 'resid_post']
 
