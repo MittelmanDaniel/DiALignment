@@ -52,8 +52,10 @@ model = HookedTransformer.from_pretrained_no_processing("meta-llama/Llama-3.2-1B
 LAYER = 7
 n_samples = min(len(benign_prompts), len(harmful_prompts))
 batch_size = 32
-refusal_dir = torch.zeros(())
-refusal_dir = llm_surgeon.remove_vec_from_benign_to_mean(model, benign_prompts, harmful_prompts, LAYER)
+refusal_dir = torch.zeros((model.cfg.d_model,), dtype=model.cfg.dtype, device=device)
+for i in range(0, n_samples, batch_size):
+    refusal_dir += llm_surgeon.remove_vec_from_benign_to_mean(model, benign_prompts[i:i+batch_size], harmful_prompts[i:i+batch_size], LAYER) / n_samples
+
 WEIGHT = 0.001
 
 llm_surgeon.add_refusal_hook(model, list(range(model.cfg.n_layers)), refusal_dir)
