@@ -131,3 +131,5 @@ dmypy.json
 
 # PyCharm
 .idea/
+venv/
+__pycache__
